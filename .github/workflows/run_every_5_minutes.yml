@@ -1,0 +1,35 @@
+name: Run Python script every 5 minutes
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"  # Exécute toutes les 5 minutes
+  workflow_dispatch:  # Permet une exécution manuelle
+
+jobs:
+  run_script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'  # Choisis la version de Python que tu utilises
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests airtable-python-wrapper python-dotenv  # Ajoute les librairies nécessaires
+
+      - name: Create .env file with GitHub Secrets
+        run: |
+          echo "RINGOVER_API_KEY=${{ secrets.RINGOVER_API_KEY }}" >> .env
+          echo "AIRTABLE_BASE_ID=${{ secrets.AIRTABLE_BASE_ID }}" >> .env
+          echo "AIRTABLE_TABLE_NAME=${{ secrets.AIRTABLE_TABLE_NAME }}" >> .env
+          echo "AIRTABLE_API_KEY=${{ secrets.AIRTABLE_API_KEY }}" >> .env
+
+      - name: Run the script
+        run: |
+          python chemin/vers/ton/script.py  # Remplace par le chemin vers ton script Python
