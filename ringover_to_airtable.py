@@ -27,10 +27,37 @@ airtable = Airtable(AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME, AIRTABLE_API_KEY)
 def get_ringover_calls():
     # Utilisation de la méthode POST qui offre plus de flexibilité selon la documentation
     url = "https://public-api.ringover.com/v2/calls"
+    
+    # CORRECTION: Modification du format d'authentification
+    # Essayer plusieurs formats possibles d'authentification
     headers = {
-        "Authorization": f"Bearer {RINGOVER_API_KEY}",
+        "Authorization": RINGOVER_API_KEY,  # Format sans "Bearer"
         "Content-Type": "application/json"
     }
+    
+    # Test initial pour vérifier le format d'authentification
+    print("🔍 Test de l'authentification à l'API Ringover...")
+    test_response = requests.get(url, headers=headers)
+    
+    if test_response.status_code == 401:
+        # Essayer avec le format Bearer
+        headers["Authorization"] = f"Bearer {RINGOVER_API_KEY}"
+        test_response = requests.get(url, headers=headers)
+        
+        if test_response.status_code == 401:
+            # Essayer avec X-API-KEY
+            headers = {
+                "X-API-KEY": RINGOVER_API_KEY,
+                "Content-Type": "application/json"
+            }
+            test_response = requests.get(url, headers=headers)
+    
+    if test_response.status_code == 401:
+        print("❌ Échec de l'authentification avec tous les formats testés.")
+        print("👉 Vérifiez que votre clé API est correcte et a les droits nécessaires.")
+        return []
+    else:
+        print(f"✅ Authentification réussie avec le format: {headers}")
     
     calls = []
     offset = 0
@@ -94,13 +121,15 @@ def get_ringover_calls():
                     print("⚠️ Aucun appel trouvé dans ce lot")
                     break
                 else:
-                    print(f"❌ Erreur Ringover API: {response.status_code} - {response.text}")
+                    print(f"❌ Erreur Ringover API: {response.status_code}")
+                    print(f"📄 Réponse: {response.text[:200]}...")
                     break
                 
         elif response.status_code == 204:
             print("⚠️ Aucun appel à synchroniser")
         else:
-            print(f"❌ Erreur Ringover API: {response.status_code} - {response.text}")
+            print(f"❌ Erreur Ringover API: {response.status_code}")
+            print(f"📄 Réponse: {response.text[:200]}...")
             
     except Exception as e:
         print(f"❌ Exception lors de la récupération des appels: {str(e)}")
@@ -157,7 +186,7 @@ def send_to_airtable(calls):
             count += 1
             
             # Afficher la progression
-            if (i + 1) % 10 == 0:
+            if (i + 1) % 10 == 0 or i == len(calls) - 1:
                 print(f"⏳ {i + 1}/{len(calls)} appels traités...")
                 
             # Respecter les limites de l'API Airtable (5 requêtes/seconde)
