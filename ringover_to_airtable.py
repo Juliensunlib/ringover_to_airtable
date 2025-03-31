@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 
 # Charger les variables depuis le fichier .env
 load_dotenv()
+
+# Afficher les valeurs des clés API pour vérifier
 print("RINGOVER_API_KEY:", os.getenv("RINGOVER_API_KEY"))
 print("AIRTABLE_BASE_ID:", os.getenv("AIRTABLE_BASE_ID"))
 print("AIRTABLE_TABLE_NAME:", os.getenv("AIRTABLE_TABLE_NAME"))
@@ -51,11 +53,16 @@ def send_to_airtable(calls):
             "Statut": call.get("status"),
             "Notes Détaillées": call.get("notes")
         }
-        airtable.insert(record)
+        try:
+            airtable.insert(record)
+            print(f"✅ Enregistré dans Airtable : {record}")
+        except Exception as e:
+            print(f"❌ Erreur lors de l'insertion dans Airtable : {e}")
 
 # Exécution
 if __name__ == "__main__":
     calls = get_ringover_calls()
+    print("Données récupérées depuis Ringover :", calls)  # Affiche les données récupérées
     if calls:
         send_to_airtable(calls)
         print("✅ Synchronisation Ringover → Airtable terminée.")
