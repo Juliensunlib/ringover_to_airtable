@@ -33,47 +33,59 @@ def get_ringover_calls():
     limit = 50  # Exemple, tu peux ajuster cette valeur
     
     while True:
-        response = requests.get(url, headers=headers, params={"limit_offset": offset, "limit_count": limit})
-        
-        if response.status_code == 200:
-            data = response.json().get("data", [])
-            if not data:
-                break  # Si aucun appel n'est retourné, on sort de la boucle
+        try:
+            response = requests.get(url, headers=headers, params={"limit_offset": offset, "limit_count": limit})
             
-            calls.extend(data)
-            offset += limit  # On passe au prochain lot de résultats
-            time.sleep(0.5)  # Respecte la limite de taux de l'API (2 appels/sec)
-        else:
-            print(f"❌ Erreur Ringover API : {response.status_code}")
+            if response.status_code == 200:
+                data = response.json().get("data", [])
+                if not data:
+                    break  # Si aucun appel n'est retourné, on sort de la boucle
+                
+                calls.extend(data)
+                offset += limit  # On passe au prochain lot de résultats
+                time.sleep(0.5)  # Respecte la limite de taux de l'API (2 appels/sec)
+            else:
+                print(f"❌ Erreur Ringover API : {response.status_code} - {response.text}")
+                break
+        except Exception as e:
+            print(f"❌ Exception lors de la récupération des appels: {str(e)}")
             break
-
+            
     return calls
 
 # Envoi des données à Airtable
 def send_to_airtable(calls):
+    count = 0
     for call in calls:
-        # Assure-toi que "start_time" est dans le bon format
-        start_time = call.get("start_time")
-        if start_time:
-            start_time = datetime.fromisoformat(start_time).strftime("%Y-%m-%d %H:%M:%S")
-        
-        record = {
-            "ID Appel": call.get("id"),
-            "Date": start_time,
-            "Durée (s)": call.get("duration"),
-            "Numéro Source": call.get("from_number"),
-            "Numéro Destination": call.get("to_number"),
-            "Type d'appel": call.get("type"),
-            "Statut": call.get("status"),
-            "Notes Détaillées": call.get("notes", "")
-        }
-        airtable.insert(record)
+        try:
+            # Assure-toi que "start_time" est dans le bon format
+            start_time = call.get("start_time")
+            if start_time:
+                start_time = datetime.fromisoformat(start_time).strftime("%Y-%m-%d %H:%M:%S")
+            
+            record = {
+                "ID Appel": call.get("id"),
+                "Date": start_time,
+                "Durée (s)": call.get("duration"),
+                "Numéro Source": call.get("from_number"),
+                "Numéro Destination": call.get("to_number"),
+                "Type d'appel": call.get("type"),
+                "Statut": call.get("status"),
+                "Notes Détaillées": call.get("notes", "")
+            }
+            airtable.insert(record)
+            count += 1
+        except Exception as e:
+            print(f"❌ Erreur lors de l'insertion dans Airtable: {str(e)}")
+    
+    return count
 
 # Exécution
 if __name__ == "__main__":
+    print("🔄 Démarrage de la synchronisation Ringover → Airtable...")
     calls = get_ringover_calls()
     if calls:
-        send_to_airtable(calls)
-        print("✅ Synchronisation Ringover → Airtable terminée.")
+        nbr_synchronisés = send_to_airtable(calls)
+        print(f"✅ Synchronisation terminée. {nbr_synchronisés}/{len(calls)} appels synchronisés.")
     else:
         print("⚠️ Aucun appel à synchroniser.")
