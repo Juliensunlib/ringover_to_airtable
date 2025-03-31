@@ -2,8 +2,8 @@ name: Run Python script every 5 minutes
 
 on:
   schedule:
-    - cron: "*/5 * * * *"  # Exécute toutes les 5 minutes
-  workflow_dispatch:  # Permet une exécution manuelle
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
 
 jobs:
   run_script:
@@ -16,20 +16,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.x'  # Choisis la version de Python que tu utilises
+          python-version: '3.x'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests airtable-python-wrapper python-dotenv  # Ajoute les librairies nécessaires
+          pip install requests airtable-python-wrapper python-dotenv
 
-      - name: Create .env file with GitHub Secrets
-        run: |
-          echo "RINGOVER_API_KEY=${{ secrets.RINGOVER_API_KEY }}" >> .env
-          echo "AIRTABLE_BASE_ID=${{ secrets.AIRTABLE_BASE_ID }}" >> .env
-          echo "AIRTABLE_TABLE_NAME=${{ secrets.AIRTABLE_TABLE_NAME }}" >> .env
-          echo "AIRTABLE_API_KEY=${{ secrets.AIRTABLE_API_KEY }}" >> .env
-
-      - name: Run the script
-        run: |
-          python chemin/vers/ton/script.py  # Remplace par le chemin vers ton script Python
+      - name: Run the Python script
+        run: python ringover_to_airtable.py  # Utilise juste le nom du fichier si il est à la racine
