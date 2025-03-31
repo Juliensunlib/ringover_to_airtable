@@ -2,8 +2,8 @@ name: Run Python script every 5 minutes
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
-  workflow_dispatch:
+    - cron: "*/5 * * * *"  # Exécution toutes les 5 minutes
+  workflow_dispatch:  # Permet d'exécuter manuellement le workflow
 
 jobs:
   run_script:
@@ -24,4 +24,9 @@ jobs:
           pip install requests airtable-python-wrapper python-dotenv
 
       - name: Run the Python script
+        env:
+          RINGOVER_API_KEY: ${{ secrets.RINGOVER_API_KEY }}
+          AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
+          AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
+          AIRTABLE_TABLE_NAME: ${{ secrets.AIRTABLE_TABLE_NAME }}
         run: python ringover_to_airtable.py  # Utilise juste le nom du fichier si il est à la racine
