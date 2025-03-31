@@ -141,36 +141,34 @@ def get_ringover_calls():
 def send_to_airtable(calls):
     count = 0
     print(f"🔄 Envoi de {len(calls)} appels vers Airtable...")
-    
+
     for i, call in enumerate(calls):
         try:
             # Vérification des appels déjà existants pour éviter les doublons
             call_id = call.get("id")
-            
-            # Vérifier si l'ID est None ou vide avant de faire la recherche
+
+            # Si l'ID est manquant, on génère un ID temporaire basé sur le start_time
             if not call_id:
-                print(f"⚠️ Appel ignoré: ID manquant (position {i+1}/{len(calls)})")
-                continue
-                
+                call_id = f"temp_id_{i+1}"
+                print(f"⚠️ Appel sans ID (création d'ID temporaire {call_id})")
+
             existing_records = airtable.search("ID Appel", call_id)
-            
+
             if existing_records:
                 print(f"⏩ Appel {call_id} déjà présent dans Airtable, ignoré.")
                 continue
-            
+
             # Traitement des dates
             start_time = call.get("start_time")
             if start_time:
-                # Vérifier si la date est déjà au format ISO
                 try:
                     start_time = datetime.fromisoformat(start_time.replace("Z", "+00:00")).strftime("%Y-%m-%d %H:%M:%S")
                 except ValueError:
-                    # Si le format est différent, essayer d'autres formats
                     try:
                         start_time = datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%S.%fZ").strftime("%Y-%m-%d %H:%M:%S")
                     except ValueError:
                         pass  # Garder la valeur originale si on ne peut pas la convertir
-            
+
             # Création d'un enregistrement plus complet en fonction des données disponibles
             record = {
                 "ID Appel": call_id,
@@ -186,21 +184,21 @@ def send_to_airtable(calls):
                 "User ID": call.get("user_id"),
                 "Channel ID": call.get("channel_id")
             }
-            
+
             # Insérer dans Airtable
             airtable.insert(record)
             count += 1
-            
+
             # Afficher la progression
             if (i + 1) % 10 == 0 or i == len(calls) - 1:
                 print(f"⏳ {i + 1}/{len(calls)} appels traités...")
-                
+
             # Respecter les limites de l'API Airtable (5 requêtes/seconde)
             time.sleep(0.2)
-            
+
         except Exception as e:
             print(f"❌ Erreur lors de l'insertion dans Airtable pour l'appel {call.get('id')}: {str(e)}")
-    
+
     return count
 
 # Exécution
