@@ -210,4 +210,4 @@ if __name__ == "__main__":
         nbr_synchronisés = send_to_airtable(calls)
         print(f"✅ Synchronisation terminée. {nbr_synchronisés}/{len(calls)} appels synchronisés.")
     else:
-        print("⚠️ Aucun appel à synchroniser.")
+        print("⚠️ Aucun appel à synchroniser.") et faut il recréer un champs dans airtable
