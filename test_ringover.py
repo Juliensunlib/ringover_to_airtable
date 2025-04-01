@@ -1,15 +1,11 @@
 import os
 import requests
-from dotenv import load_dotenv
 
-# Charger les variables d'environnement
-load_dotenv()
-
-# Récupérer la clé API depuis les variables d'environnement
+# Récupérer la clé API depuis les variables d'environnement GitHub Actions
 api_key = os.getenv("RINGOVER_API_KEY")
 
 if not api_key:
-    print("❌ Erreur : Clé API introuvable. Vérifie ton fichier .env ou tes secrets GitHub.")
+    print("❌ Erreur : Clé API introuvable. Assure-toi qu'elle est bien définie dans les Secrets GitHub.")
     exit(1)
 
 # URL de test de l'API Ringover
@@ -32,7 +28,7 @@ if response.status_code == 200:
     print("✅ Succès ! Réponse de l'API Ringover :")
     print(response.json())
 elif response.status_code == 401:
-    print("❌ Erreur 401 : Accès non autorisé. Vérifie ta clé API.")
+    print("❌ Erreur 401 : Accès non autorisé. Vérifie ta clé API dans les Secrets GitHub.")
 elif response.status_code == 403:
     print("❌ Erreur 403 : Accès refusé. Vérifie les permissions de ta clé API.")
 else:
