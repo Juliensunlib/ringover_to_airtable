@@ -144,20 +144,42 @@ def send_to_airtable(calls):
 
     for i, call in enumerate(calls):
         try:
-            # Vérification des appels déjà existants pour éviter les doublons
-            call_id = call.get("id")
-
-            # Si l'ID est manquant, on génère un ID temporaire basé sur le start_time
+            # Extraction de call_id (ID de l'appel)
+            call_id = call.get("call_id")
+            
+            # Si l'ID est manquant, on utilise cdr_id ou on génère un ID temporaire
             if not call_id:
-                call_id = f"temp_id_{i+1}"
+                call_id = call.get("cdr_id") or f"temp_id_{i+1}"
                 print(f"⚠️ Appel sans ID (création d'ID temporaire {call_id})")
 
-            existing_records = airtable.search("ID Appel", call_id)
+            # Vérification des appels déjà existants pour éviter les doublons
+            existing_records = airtable.search("ID Appel", str(call_id))
 
             if existing_records:
                 print(f"⏩ Appel {call_id} déjà présent dans Airtable, ignoré.")
                 continue
 
+            # Extraction des informations de l'utilisateur, y compris les initiales
+            user_info = call.get("user", {})
+            user_id = user_info.get("initial", "")  # Récupération des initiales
+            user_name = user_info.get("concat_name", "")
+            
+            # Extraction des notes
+            notes = call.get("note") or call.get("notes") or ""
+            if isinstance(notes, list) and notes:
+                notes = ", ".join(notes)
+                
+            # Récupération des informations de contact si disponibles
+            contact_info = call.get("contact", {})
+            contact_name = ""
+            if contact_info:
+                contact_name = contact_info.get("concat_name", "")
+
+            # Création d'une note détaillée enrichie
+            detailed_notes = notes
+            if contact_name:
+                detailed_notes = f"Contact: {contact_name}\n{detailed_notes}" if detailed_notes else f"Contact: {contact_name}"
+                
             # Traitement des dates
             start_time = call.get("start_time")
             if start_time:
@@ -169,19 +191,22 @@ def send_to_airtable(calls):
                     except ValueError:
                         pass  # Garder la valeur originale si on ne peut pas la convertir
 
+            # Récupération de la durée (priorité à total_duration puis incall_duration)
+            duration = call.get("total_duration") or call.get("incall_duration") or call.get("duration")
+
             # Création d'un enregistrement plus complet en fonction des données disponibles
             record = {
-                "ID Appel": call_id,
+                "ID Appel": str(call_id),  # Conversion en string pour assurer la compatibilité
                 "Date": start_time,
-                "Durée (s)": call.get("duration"),
+                "Durée (s)": duration,
                 "Numéro Source": call.get("from_number"),
                 "Numéro Destination": call.get("to_number"),
                 "Type d'appel": call.get("type"),
-                "Statut": call.get("status"),
-                "Notes Détaillées": call.get("notes", ""),
+                "Statut": call.get("last_state") or call.get("status"),
+                "Notes Détaillées": detailed_notes,
                 "Direction": call.get("direction"),
                 "Scénario": call.get("scenario_name"),
-                "User ID": call.get("user_id"),
+                "User ID": user_id,  # Utilisation des initiales comme User ID
                 "Channel ID": call.get("channel_id")
             }
 
@@ -197,7 +222,7 @@ def send_to_airtable(calls):
             time.sleep(0.2)
 
         except Exception as e:
-            print(f"❌ Erreur lors de l'insertion dans Airtable pour l'appel {call.get('id')}: {str(e)}")
+            print(f"❌ Erreur lors de l'insertion dans Airtable pour l'appel {call.get('call_id')}: {str(e)}")
 
     return count
 
