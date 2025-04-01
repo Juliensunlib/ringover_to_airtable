@@ -166,10 +166,39 @@ def get_ringover_calls():
         
     return calls
 
+# Obtenir les champs disponibles dans Airtable
+def get_airtable_fields():
+    try:
+        # Récupérer un enregistrement pour voir la structure
+        records = airtable.get(maxRecords=1)
+        if records and 'records' in records and len(records['records']) > 0:
+            first_record = records['records'][0]
+            if 'fields' in first_record:
+                return set(first_record['fields'].keys())
+        
+        # Si aucun enregistrement n'existe, utiliser une liste de champs standard
+        return {
+            "ID Appel", "Date", "Durée (s)", "Numéro Source", "Numéro Destination",
+            "Type d'appel", "Statut", "Notes Détaillées", "Direction", "Scénario",
+            "User ID", "Channel ID", "Données brutes"
+        }
+    except Exception as e:
+        print(f"⚠️ Impossible de récupérer les champs Airtable: {str(e)}")
+        # Retourner une liste de champs de base
+        return {
+            "ID Appel", "Date", "Durée (s)", "Numéro Source", "Numéro Destination",
+            "Type d'appel", "Statut", "Notes Détaillées", "Direction", "Scénario",
+            "User ID", "Channel ID", "Données brutes"
+        }
+
 # Envoi des données à Airtable
 def send_to_airtable(calls):
     count = 0
     print(f"🔄 Envoi de {len(calls)} appels vers Airtable...")
+    
+    # Récupérer les champs disponibles dans Airtable
+    available_fields = get_airtable_fields()
+    print(f"📋 Champs disponibles dans Airtable: {available_fields}")
 
     for i, call in enumerate(calls):
         try:
@@ -245,8 +274,11 @@ def send_to_airtable(calls):
                         except ValueError:
                             pass  # Garder la valeur originale si on ne peut pas la convertir
 
-            # Construction d'un record plus complet en examinant tous les champs disponibles
-            record = {
+            # Construction d'un record avec uniquement les champs qui existent dans Airtable
+            record = {}
+            
+            # Ajouter les champs standard s'ils existent dans Airtable
+            standard_fields = {
                 "ID Appel": call_id,
                 "Date": start_time,
                 "Durée (s)": duration,
@@ -261,12 +293,14 @@ def send_to_airtable(calls):
                 "Channel ID": call.get("channel_id") or call.get("channelId")
             }
             
-            # Ajouter tous les autres champs disponibles pour référence
-            for key, value in call.items():
-                if key not in record and value is not None:
-                    field_name = f"API_{key}"
-                    record[field_name] = str(value)[:255]  # Limiter la longueur pour Airtable
-
+            for field, value in standard_fields.items():
+                if field in available_fields and value is not None:
+                    record[field] = value
+            
+            # Stocker toutes les données brutes dans un champ JSON si disponible
+            if "Données brutes" in available_fields:
+                record["Données brutes"] = json.dumps(call)
+            
             # Insérer dans Airtable
             airtable.insert(record)
             count += 1
