@@ -164,21 +164,50 @@ def send_to_airtable(calls):
             user_id = user_info.get("initial", "")  # Récupération des initiales
             user_name = user_info.get("concat_name", "")
             
-            # Extraction des notes
-            notes = call.get("note") or call.get("notes") or ""
-            if isinstance(notes, list) and notes:
-                notes = ", ".join(notes)
-                
-            # Récupération des informations de contact si disponibles
+            # Extraction des notes d'appel (saisies par les agents)
+            agent_notes = call.get("note", "")
+            
+            # Récupération des informations de contact
             contact_info = call.get("contact", {})
             contact_name = ""
+            contact_details = ""
+            
             if contact_info:
+                # Récupération du nom du contact
                 contact_name = contact_info.get("concat_name", "")
-
-            # Création d'une note détaillée enrichie
-            detailed_notes = notes
-            if contact_name:
-                detailed_notes = f"Contact: {contact_name}\n{detailed_notes}" if detailed_notes else f"Contact: {contact_name}"
+                
+                # Construction des détails du contact
+                contact_details_list = []
+                
+                # Ajout du nom
+                if contact_name:
+                    contact_details_list.append(f"Nom: {contact_name}")
+                
+                # Ajout de l'entreprise
+                company = contact_info.get("company")
+                if company:
+                    contact_details_list.append(f"Entreprise: {company}")
+                
+                # Ajout des emails
+                emails = contact_info.get("emails", [])
+                if emails:
+                    email_str = ", ".join([e.get("email") for e in emails if e.get("email")])
+                    if email_str:
+                        contact_details_list.append(f"Email: {email_str}")
+                
+                # Ajout des numéros de téléphone
+                numbers = contact_info.get("numbers", [])
+                if numbers:
+                    for num in numbers:
+                        num_format = num.get("format", {})
+                        if num_format:
+                            number_str = num_format.get("national", "")
+                            number_type = num.get("type", "")
+                            if number_str and number_type:
+                                contact_details_list.append(f"Tél ({number_type}): {number_str}")
+                
+                # Formatage final des détails
+                contact_details = "\n".join(contact_details_list)
                 
             # Traitement des dates
             start_time = call.get("start_time")
@@ -203,7 +232,9 @@ def send_to_airtable(calls):
                 "Numéro Destination": call.get("to_number"),
                 "Type d'appel": call.get("type"),
                 "Statut": call.get("last_state") or call.get("status"),
-                "Notes Détaillées": detailed_notes,
+                "Notes Détaillées": agent_notes,  # Uniquement les notes saisies par l'agent
+                "Contact": contact_details,  # Nouvelle colonne pour les informations de contact
+                "Nom du Contact": contact_name,  # Juste le nom du contact
                 "Direction": call.get("direction"),
                 "Scénario": call.get("scenario_name"),
                 "User ID": user_id,  # Utilisation des initiales comme User ID
