@@ -23,6 +23,20 @@ if not all([RINGOVER_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME, AIRTABLE_AP
 # Connexion à Airtable
 airtable = Airtable(AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME, AIRTABLE_API_KEY)
 
+# Récupération de tous les IDs d'appels déjà existants dans Airtable
+def get_existing_call_ids():
+    print("📋 Récupération des ID d'appels existants dans Airtable...")
+    existing_ids = set()
+    all_records = airtable.get_all()
+    
+    for record in all_records:
+        call_id = record['fields'].get('ID Appel')
+        if call_id:
+            existing_ids.add(str(call_id))
+    
+    print(f"✓ {len(existing_ids)} ID d'appels déjà présents dans Airtable.")
+    return existing_ids
+
 # Récupération des appels depuis Ringover
 def get_ringover_calls():
     # Utilisation de la méthode POST qui offre plus de flexibilité selon la documentation
@@ -138,8 +152,9 @@ def get_ringover_calls():
     return calls
 
 # Envoi des données à Airtable
-def send_to_airtable(calls):
+def send_to_airtable(calls, existing_ids):
     count = 0
+    skipped = 0
     print(f"🔄 Envoi de {len(calls)} appels vers Airtable...")
 
     for i, call in enumerate(calls):
@@ -151,12 +166,14 @@ def send_to_airtable(calls):
             if not call_id:
                 call_id = call.get("cdr_id") or f"temp_id_{i+1}"
                 print(f"⚠️ Appel sans ID (création d'ID temporaire {call_id})")
+            
+            # Conversion en string pour assurer la compatibilité
+            call_id = str(call_id)
 
-            # Vérification des appels déjà existants pour éviter les doublons
-            existing_records = airtable.search("ID Appel", str(call_id))
-
-            if existing_records:
+            # Vérification des appels déjà existants (en utilisant le set pré-chargé)
+            if call_id in existing_ids:
                 print(f"⏩ Appel {call_id} déjà présent dans Airtable, ignoré.")
+                skipped += 1
                 continue
 
             # Extraction des informations de l'utilisateur, y compris les initiales
@@ -225,7 +242,7 @@ def send_to_airtable(calls):
 
             # Création d'un enregistrement plus complet en fonction des données disponibles
             record = {
-                "ID Appel": str(call_id),  # Conversion en string pour assurer la compatibilité
+                "ID Appel": call_id,
                 "Date": start_time,
                 "Durée (s)": duration,
                 "Numéro Source": call.get("from_number"),
@@ -244,6 +261,9 @@ def send_to_airtable(calls):
             # Insérer dans Airtable
             airtable.insert(record)
             count += 1
+            
+            # Ajouter l'ID au set des ID existants pour éviter les doublons dans le batch actuel
+            existing_ids.add(call_id)
 
             # Afficher la progression
             if (i + 1) % 10 == 0 or i == len(calls) - 1:
@@ -255,15 +275,20 @@ def send_to_airtable(calls):
         except Exception as e:
             print(f"❌ Erreur lors de l'insertion dans Airtable pour l'appel {call.get('call_id')}: {str(e)}")
 
-    return count
+    return count, skipped
 
 # Exécution
 if __name__ == "__main__":
     print("🚀 Démarrage de la synchronisation Ringover → Airtable...")
+    
+    # Récupération des IDs existants
+    existing_ids = get_existing_call_ids()
+    
+    # Récupération des appels
     calls = get_ringover_calls()
     
     if calls:
-        nbr_synchronisés = send_to_airtable(calls)
-        print(f"✅ Synchronisation terminée. {nbr_synchronisés}/{len(calls)} appels synchronisés.")
+        nbr_synchronisés, nbr_ignorés = send_to_airtable(calls, existing_ids)
+        print(f"✅ Synchronisation terminée. {nbr_synchronisés}/{len(calls)} appels synchronisés ({nbr_ignorés} ignorés car déjà présents).")
     else:
         print("⚠️ Aucun appel à synchroniser.")
