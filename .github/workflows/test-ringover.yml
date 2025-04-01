@@ -1,26 +1,39 @@
-name: Test Ringover API
+name: Test API Ringover
 
 on:
-  workflow_dispatch:  # Permet de déclencher le test manuellement
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  test-ringover:
+  test_api:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Cloner le dépôt
+      - name: Checkout du repo
         uses: actions/checkout@v4
 
       - name: Configurer Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'  # Version de Python à utiliser
+          python-version: '3.10'
 
       - name: Installer les dépendances
-        run: pip install requests python-dotenv
+        run: pip install requests
 
-      - name: Créer le fichier .env
-        run: echo "RINGOVER_API_KEY=${{ secrets.RINGOVER_API_KEY }}" > .env
+      - name: Vérifier la clé API (masquée)
+        run: echo "Clé API chargée : ${RINGOVER_API_KEY::4}****"
+        shell: bash
+        env:
+          RINGOVER_API_KEY: ${{ secrets.RINGOVER_API_KEY }}
 
-      - name: Exécuter le script
+      - name: Test API avec curl
+        run: curl -H "Authorization: Bearer $RINGOVER_API_KEY" "https://public-api.ringover.com/v2/calls"
+        shell: bash
+        env:
+          RINGOVER_API_KEY: ${{ secrets.RINGOVER_API_KEY }}
+
+      - name: Exécuter le test Ringover
         run: python test_ringover.py
+        env:
+          RINGOVER_API_KEY: ${{ secrets.RINGOVER_API_KEY }}
