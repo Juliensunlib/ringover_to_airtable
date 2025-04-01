@@ -23,15 +23,15 @@ if not all([RINGOVER_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME, AIRTABLE_AP
 # Connexion à Airtable
 airtable = Airtable(AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME, AIRTABLE_API_KEY)
 
-# Fonction pour récupérer les ID des appels déjà enregistrés dans Airtable
+# Récupération des appels déjà enregistrés dans Airtable
 def get_existing_call_ids():
-    print("📥 Récupération des appels déjà enregistrés dans Airtable...")
-    existing_ids = set()
+    existing_call_ids = set()
     records = airtable.get_all(fields=["ID Appel"])
     for record in records:
-        existing_ids.add(record['fields'].get("ID Appel"))
-    print(f"🔍 {len(existing_ids)} appels déjà présents dans Airtable.")
-    return existing_ids
+        call_id = record['fields'].get("ID Appel")
+        if call_id:
+            existing_call_ids.add(call_id)
+    return existing_call_ids
 
 # Récupération des appels depuis Ringover
 def get_ringover_calls():
@@ -40,67 +40,43 @@ def get_ringover_calls():
         "Authorization": f"Bearer {RINGOVER_API_KEY}",
         "Content-Type": "application/json"
     }
-    calls = []
-    offset = 0
-    limit = 50
-
     end_date = datetime.now()
     start_date = end_date - timedelta(days=14)
     start_date_iso = start_date.isoformat() + "Z"
     end_date_iso = end_date.isoformat() + "Z"
-    print(f"🔍 Recherche des appels entre {start_date_iso} et {end_date_iso}")
-
+    
     payload = {
         "start_date": start_date_iso,
         "end_date": end_date_iso,
-        "limit_count": limit,
-        "limit_offset": offset
+        "limit_count": 50,
+        "limit_offset": 0
     }
-
+    
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code == 200:
-        data = response.json()
-        calls = data.get("call_list", [])
+        return response.json().get("call_list", [])
     else:
         print(f"❌ Erreur Ringover API: {response.status_code}")
+        return []
 
-    print(f"✓ Récupération de {len(calls)} appels terminée")
-    return calls
-
-# Envoi des nouveaux appels à Airtable
-def send_to_airtable(calls, existing_call_ids):
+# Envoi des appels vers Airtable
+def send_to_airtable(calls):
+    existing_call_ids = get_existing_call_ids()
     count = 0
-    print(f"🔄 Envoi de {len(calls)} nouveaux appels vers Airtable...")
-
-    for i, call in enumerate(calls):
+    for call in calls:
         call_id = str(call.get("call_id"))
         if call_id in existing_call_ids:
-            print(f"⏩ Appel {call_id} déjà présent dans Airtable, ignoré.")
             continue
-
-        record = {
-            "ID Appel": call_id,
-            "Date": call.get("start_time"),
-            "Durée (s)": call.get("total_duration"),
-            "Numéro Source": call.get("from_number"),
-            "Numéro Destination": call.get("to_number"),
-            "Type d'appel": call.get("type"),
-            "Statut": call.get("last_state"),
-        }
-
-        airtable.insert(record)
+        airtable.insert({"ID Appel": call_id})
         count += 1
         time.sleep(0.2)
     return count
 
-# Exécution
 if __name__ == "__main__":
     print("🚀 Démarrage de la synchronisation Ringover → Airtable...")
-    existing_call_ids = get_existing_call_ids()
     calls = get_ringover_calls()
-    
     if calls:
-        nbr_synchronisés = send_to_airtable(calls, existing_call_ids)
-        print(f"✅ Synchronisation terminée. {nbr_synchronisés}/{len(calls)} nouveaux appels ajoutés.")
+        synced_count = send_to_airtable(calls)
+        print(f"✅ Synchronisation terminée. {synced_count}/{len(calls)} appels synchronisés.")
     else:
         print("⚠️ Aucun appel à synchroniser.")
