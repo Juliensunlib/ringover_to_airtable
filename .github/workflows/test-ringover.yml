@@ -10,23 +10,29 @@ jobs:
   test_api:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout du code
+      - name: 📥 Checkout du code
         uses: actions/checkout@v4
 
-      - name: Configurer Python
+      - name: 🛠️ Configurer Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Installer les dépendances
+      - name: 📦 Installer les dépendances
         run: pip install requests
 
-      - name: Vérifier la clé API (Masquée)
-        run: echo "Clé API chargée : OK"
+      - name: 🔍 Vérifier si la clé API est bien chargée
+        run: |
+          if [[ -z "${RINGOVER_API_KEY}" ]]; then
+            echo "❌ ERREUR : Clé API non chargée ! Vérifie tes Secrets GitHub."
+            exit 1
+          else
+            echo "✅ Clé API détectée."
+          fi
         env:
           RINGOVER_API_KEY: ${{ secrets.RINGOVER_API_KEY }}
 
-      - name: Exécuter le test de l'API Ringover
+      - name: 🚀 Exécuter le test de l'API Ringover
         run: python test_ringover.py
         env:
           RINGOVER_API_KEY: ${{ secrets.RINGOVER_API_KEY }}
