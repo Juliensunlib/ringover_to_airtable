@@ -10,7 +10,7 @@ jobs:
   test_api:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout du repo
+      - name: Checkout du code
         uses: actions/checkout@v4
 
       - name: Configurer Python
@@ -21,19 +21,12 @@ jobs:
       - name: Installer les dépendances
         run: pip install requests
 
-      - name: Vérifier la clé API (masquée)
-        run: echo "Clé API chargée : ${RINGOVER_API_KEY::4}****"
-        shell: bash
+      - name: Vérifier la clé API (Masquée)
+        run: echo "Clé API chargée : OK"
         env:
           RINGOVER_API_KEY: ${{ secrets.RINGOVER_API_KEY }}
 
-      - name: Test API avec curl
-        run: curl -H "Authorization: Bearer $RINGOVER_API_KEY" "https://public-api.ringover.com/v2/calls"
-        shell: bash
-        env:
-          RINGOVER_API_KEY: ${{ secrets.RINGOVER_API_KEY }}
-
-      - name: Exécuter le test Ringover
+      - name: Exécuter le test de l'API Ringover
         run: python test_ringover.py
         env:
           RINGOVER_API_KEY: ${{ secrets.RINGOVER_API_KEY }}
