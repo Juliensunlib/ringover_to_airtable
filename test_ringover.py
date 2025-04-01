@@ -1,38 +1,40 @@
 import os
 import requests
 
-# Récupérer la clé API depuis les variables d'environnement GitHub
-api_key = os.getenv("RINGOVER_API_KEY")
+# Charger la clé API depuis GitHub Secrets
+API_KEY = os.getenv("RINGOVER_API_KEY")
 
-if not api_key:
-    print("❌ Erreur : Clé API introuvable. Assure-toi qu'elle est bien définie dans les Secrets GitHub.")
+# Vérifier si la clé API est bien récupérée
+if not API_KEY:
+    print("❌ Erreur : La clé API n'a pas été chargée. Vérifie ton Secret GitHub.")
     exit(1)
 
-# URL de l'API Ringover
+print(f"🔍 Clé API chargée : {API_KEY[:5]}... (longueur {len(API_KEY)})")
+
+# Définition de l’URL de l’API Ringover
 url = "https://public-api.ringover.com/v2/calls"
 
-# Headers
-headers = {
-    "Authorization": f"Bearer {api_key}",
-    "Content-Type": "application/json"
-}
+# Liste des formats d'authentification à tester
+auth_headers = [
+    {"Authorization": API_KEY, "Accept": "application/json"},  # Sans "Bearer"
+    {"Authorization": f"Bearer {API_KEY}", "Accept": "application/json"},  # Avec "Bearer"
+    {"X-API-KEY": API_KEY, "Accept": "application/json"}  # Avec "X-API-KEY"
+]
 
-# Exécuter la requête
-response = requests.get(url, headers=headers)
+# Test d'authentification avec plusieurs formats
+for headers in auth_headers:
+    print(f"🔍 Test avec l'en-tête : {list(headers.keys())[0]}")
+    response = requests.get(url, headers=headers)
 
-# Vérifier le statut HTTP
-print(f"Statut de la requête : {response.status_code}")
+    if response.status_code == 200:
+        print("✅ Succès ! Authentification réussie.")
+        print("📊 Réponse API :", response.json())
+        exit(0)
+    elif response.status_code == 401:
+        print(f"❌ Échec avec {list(headers.keys())[0]} (401 Unauthorized).")
+    else:
+        print(f"⚠️ Erreur {response.status_code} : {response.text}")
 
-if response.status_code == 200:
-    print("✅ Succès ! L'API Ringover a répondu correctement.")
-    print(response.json())
-    exit(0)
-elif response.status_code == 401:
-    print("❌ Erreur 401 : Accès non autorisé. Vérifie ta clé API dans les Secrets GitHub.")
-    exit(1)
-elif response.status_code == 403:
-    print("❌ Erreur 403 : Accès refusé. Vérifie les permissions de ta clé API.")
-    exit(1)
-else:
-    print(f"❌ Erreur {response.status_code} : {response.text}")
-    exit(1)
+# Si aucun format ne fonctionne
+print("❌ Aucun format d'authentification n'a fonctionné. Vérifie la clé API et les permissions.")
+exit(1)
