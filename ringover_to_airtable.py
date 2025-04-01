@@ -28,36 +28,34 @@ def get_ringover_calls():
     # Utilisation de la méthode POST qui offre plus de flexibilité selon la documentation
     url = "https://public-api.ringover.com/v2/calls"
     
-    # CORRECTION: Modification du format d'authentification
-    # Essayer plusieurs formats possibles d'authentification
-    headers = {
-        "Authorization": RINGOVER_API_KEY,  # Format sans "Bearer"
-        "Content-Type": "application/json"
-    }
+    # AMÉLIORATION: Test de plusieurs formats d'authentification
+    auth_formats = [
+        {"Authorization": RINGOVER_API_KEY},
+        {"Authorization": f"Bearer {RINGOVER_API_KEY}"},
+        {"X-API-KEY": RINGOVER_API_KEY},
+        {"Api-Key": RINGOVER_API_KEY}
+    ]
     
-    # Test initial pour vérifier le format d'authentification
-    print("🔍 Test de l'authentification à l'API Ringover...")
-    test_response = requests.get(url, headers=headers)
+    headers = None
     
-    if test_response.status_code == 401:
-        # Essayer avec le format Bearer
-        headers["Authorization"] = f"Bearer {RINGOVER_API_KEY}"
-        test_response = requests.get(url, headers=headers)
-        
-        if test_response.status_code == 401:
-            # Essayer avec X-API-KEY
-            headers = {
-                "X-API-KEY": RINGOVER_API_KEY,
-                "Content-Type": "application/json"
-            }
-            test_response = requests.get(url, headers=headers)
+    print("🔍 Test des formats d'authentification à l'API Ringover...")
+    for auth_format in auth_formats:
+        test_headers = {**auth_format, "Content-Type": "application/json"}
+        try:
+            test_response = requests.get(url, headers=test_headers)
+            print(f"Format testé: {auth_format} - Statut: {test_response.status_code}")
+            
+            if test_response.status_code != 401:
+                headers = test_headers
+                print(f"✅ Authentification réussie avec: {auth_format}")
+                break
+        except Exception as e:
+            print(f"❌ Erreur lors du test d'authentification: {str(e)}")
     
-    if test_response.status_code == 401:
+    if headers is None:
         print("❌ Échec de l'authentification avec tous les formats testés.")
         print("👉 Vérifiez que votre clé API est correcte et a les droits nécessaires.")
         return []
-    else:
-        print(f"✅ Authentification réussie avec le format: {headers}")
     
     calls = []
     offset = 0
@@ -84,12 +82,28 @@ def get_ringover_calls():
         
         response = requests.post(url, headers=headers, json=payload)
         
+        # DEBUG: Afficher la réponse complète pour la première requête
+        print(f"👀 Réponse API pour la première requête (format): {response.status_code}")
         if response.status_code == 200:
-            data = response.json()
-            total_calls = data.get("total_call_count", 0)
-            print(f"📊 Total des appels disponibles: {total_calls}")
-            
-            if total_calls == 0:
+            try:
+                sample_data = response.json()
+                print(f"📊 Exemple de structure de données reçue:")
+                # Afficher la structure pour déboguer
+                print(json.dumps(sample_data, indent=2)[:500] + "..." if len(json.dumps(sample_data)) > 500 else "")
+                
+                # Vérifier les champs disponibles dans un appel
+                if "call_list" in sample_data and len(sample_data["call_list"]) > 0:
+                    sample_call = sample_data["call_list"][0]
+                    print(f"📞 Exemple de champs disponibles dans un appel:")
+                    print(json.dumps(sample_call, indent=2))
+                    
+                total_calls = sample_data.get("total_call_count", 0)
+                print(f"📊 Total des appels disponibles: {total_calls}")
+                
+                if total_calls == 0:
+                    return []
+            except Exception as e:
+                print(f"⚠️ Erreur lors de l'analyse de la réponse: {str(e)}")
                 return []
             
             # Récupération par lots
@@ -107,9 +121,18 @@ def get_ringover_calls():
                 
                 if response.status_code == 200:
                     data = response.json()
-                    batch_calls = data.get("call_list", [])
+                    
+                    # Vérifier la structure de la réponse pour s'adapter
+                    if "call_list" in data:
+                        batch_calls = data.get("call_list", [])
+                    else:
+                        # Structure alternative possible
+                        batch_calls = data.get("calls", [])
+                        if not batch_calls and isinstance(data, list):
+                            batch_calls = data
                     
                     if not batch_calls:
+                        print("⚠️ Aucun appel trouvé dans ce lot ou format de réponse non reconnu")
                         break
                     
                     calls.extend(batch_calls)
@@ -135,6 +158,12 @@ def get_ringover_calls():
         print(f"❌ Exception lors de la récupération des appels: {str(e)}")
     
     print(f"✓ Récupération de {len(calls)} appels terminée")
+    
+    # Si des appels ont été récupérés, afficher le premier pour vérifier la structure
+    if calls and len(calls) > 0:
+        print(f"📄 Structure du premier appel récupéré:")
+        print(json.dumps(calls[0], indent=2))
+        
     return calls
 
 # Envoi des données à Airtable
@@ -144,22 +173,64 @@ def send_to_airtable(calls):
 
     for i, call in enumerate(calls):
         try:
-            # Vérification des appels déjà existants pour éviter les doublons
-            call_id = call.get("id")
-
-            # Si l'ID est manquant, on génère un ID temporaire basé sur le start_time
+            # Recherche de champs d'ID avec plusieurs variations possibles
+            call_id = None
+            id_field_variations = ["id", "call_id", "callId", "uid", "uniqueId"]
+            for field in id_field_variations:
+                if field in call and call[field]:
+                    call_id = call[field]
+                    print(f"✓ ID d'appel trouvé sous le champ '{field}': {call_id}")
+                    break
+            
+            # Si l'ID est toujours manquant, on génère un ID temporaire
             if not call_id:
                 call_id = f"temp_id_{i+1}"
                 print(f"⚠️ Appel sans ID (création d'ID temporaire {call_id})")
 
+            # Vérification des appels déjà existants pour éviter les doublons
             existing_records = airtable.search("ID Appel", call_id)
 
             if existing_records:
                 print(f"⏩ Appel {call_id} déjà présent dans Airtable, ignoré.")
                 continue
 
+            # Recherche de variations pour les champs importants
+            notes = None
+            notes_field_variations = ["notes", "note", "comment", "comments", "description"]
+            for field in notes_field_variations:
+                if field in call and call[field]:
+                    notes = call[field]
+                    print(f"✓ Notes trouvées sous le champ '{field}'")
+                    break
+            
+            # Recherche de variations pour le champ durée
+            duration = None
+            duration_field_variations = ["duration", "call_duration", "callDuration", "length", "time"]
+            for field in duration_field_variations:
+                if field in call and call[field] is not None:
+                    duration = call[field]
+                    print(f"✓ Durée trouvée sous le champ '{field}': {duration}")
+                    break
+            
+            # Recherche de variations pour le champ user_id
+            user_id = None
+            user_id_field_variations = ["user_id", "userId", "operator_id", "operatorId", "agent_id", "agentId"]
+            for field in user_id_field_variations:
+                if field in call and call[field]:
+                    user_id = call[field]
+                    print(f"✓ User ID trouvé sous le champ '{field}': {user_id}")
+                    break
+
             # Traitement des dates
-            start_time = call.get("start_time")
+            start_time = None
+            start_time_field_variations = ["start_time", "startTime", "start_date", "startDate", "date", "timestamp"]
+            for field in start_time_field_variations:
+                if field in call and call[field]:
+                    start_time = call[field]
+                    print(f"✓ Date de début trouvée sous le champ '{field}': {start_time}")
+                    break
+            
+            # Conversion de la date si nécessaire
             if start_time:
                 try:
                     start_time = datetime.fromisoformat(start_time.replace("Z", "+00:00")).strftime("%Y-%m-%d %H:%M:%S")
@@ -167,23 +238,34 @@ def send_to_airtable(calls):
                     try:
                         start_time = datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%S.%fZ").strftime("%Y-%m-%d %H:%M:%S")
                     except ValueError:
-                        pass  # Garder la valeur originale si on ne peut pas la convertir
+                        try:
+                            # Essai de conversion d'un timestamp Unix
+                            if isinstance(start_time, (int, float)):
+                                start_time = datetime.fromtimestamp(start_time).strftime("%Y-%m-%d %H:%M:%S")
+                        except ValueError:
+                            pass  # Garder la valeur originale si on ne peut pas la convertir
 
-            # Création d'un enregistrement plus complet en fonction des données disponibles
+            # Construction d'un record plus complet en examinant tous les champs disponibles
             record = {
                 "ID Appel": call_id,
                 "Date": start_time,
-                "Durée (s)": call.get("duration"),
-                "Numéro Source": call.get("from_number"),
-                "Numéro Destination": call.get("to_number"),
-                "Type d'appel": call.get("type"),
-                "Statut": call.get("status"),
-                "Notes Détaillées": call.get("notes", ""),
+                "Durée (s)": duration,
+                "Numéro Source": call.get("from_number") or call.get("from") or call.get("source"),
+                "Numéro Destination": call.get("to_number") or call.get("to") or call.get("destination"),
+                "Type d'appel": call.get("type") or call.get("call_type"),
+                "Statut": call.get("status") or call.get("call_status"),
+                "Notes Détaillées": notes or "",
                 "Direction": call.get("direction"),
-                "Scénario": call.get("scenario_name"),
-                "User ID": call.get("user_id"),
-                "Channel ID": call.get("channel_id")
+                "Scénario": call.get("scenario_name") or call.get("scenario"),
+                "User ID": user_id,
+                "Channel ID": call.get("channel_id") or call.get("channelId")
             }
+            
+            # Ajouter tous les autres champs disponibles pour référence
+            for key, value in call.items():
+                if key not in record and value is not None:
+                    field_name = f"API_{key}"
+                    record[field_name] = str(value)[:255]  # Limiter la longueur pour Airtable
 
             # Insérer dans Airtable
             airtable.insert(record)
@@ -197,7 +279,7 @@ def send_to_airtable(calls):
             time.sleep(0.2)
 
         except Exception as e:
-            print(f"❌ Erreur lors de l'insertion dans Airtable pour l'appel {call.get('id')}: {str(e)}")
+            print(f"❌ Erreur lors de l'insertion dans Airtable pour l'appel {i}: {str(e)}")
 
     return count
 
